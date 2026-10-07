@@ -1,5 +1,7 @@
 # サムネ視認性チェッカー（Thumbnail-Visibility-Checker）
 
+https://ibaran1um.github.io/Thumbnail-Visibility-Checker/
+
 サムネイルや配信オーバーレイの画像を読み込むと、次の4つをまとめて確認できるブラウザツールです。
 
 1. **小さく表示したときの見え方** — 一覧表示を想定した幅で、実際の大きさで並べて表示
