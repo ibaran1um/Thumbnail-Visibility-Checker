@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>サムネ視認性チェッカー</title>
+<meta name="description" content="サムネイルや配信オーバーレイ画像の見やすさを、縮小表示・色覚シミュレーション・コントラスト比・重なり領域でまとめて確認するブラウザツール。画像は外部に送信されません。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='7' width='26' height='18' rx='3' fill='%23e8590c'/%3E%3Ccircle cx='16' cy='16' r='5' fill='white'/%3E%3Ccircle cx='16' cy='16' r='2.2' fill='%23222'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <h1>サムネ視認性チェッカー</h1>
+    <p class="lead">サムネイルや配信オーバーレイの画像を読み込むと、小さく表示したとき・色の見え方が違うとき・文字と背景のコントラスト・端に表示が重なるときの見え方をまとめて確認できます。</p>
+    <p class="privacy">画像はこのブラウザの中だけで処理され、外部には送信されません。</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="drop" class="drop" tabindex="0" aria-label="画像の読み込み">
+    <input type="file" id="file" accept="image/*" hidden>
+    <p class="drop-main">画像をここにドロップ</p>
+    <p class="drop-sub">または <button type="button" id="pick" class="btn">ファイルを選ぶ</button> ／ Ctrl+V（⌘+V）で貼り付け</p>
+    <p id="loaded-name" class="drop-sub" hidden></p>
+  </section>
+
+  <div id="workspace" hidden>
+    <!-- 縮小表示 -->
+    <section class="panel" id="panel-small">
+      <div class="panel-head">
+        <h2>1. 小さく表示したときの見え方</h2>
+        <div class="controls">
+          <label>背景
+            <select id="small-bg">
+              <option value="light">明るい</option>
+              <option value="dark">暗い</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <p class="note">一覧表示を想定した幅（CSSピクセル）で、この画面に実際の大きさで表示します。各サービスの実際の表示幅は端末や画面によって変わるため、下の一覧で自由に編集してください。</p>
+      <div id="small-row" class="small-row"></div>
+      <details class="editor">
+        <summary>表示幅のプリセットを編集</summary>
+        <div id="size-list" class="row-list"></div>
+        <div class="editor-actions">
+          <button type="button" class="btn" id="size-add">幅を追加</button>
+          <button type="button" class="btn ghost" id="size-reset">初期値に戻す</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- 色覚・明度 -->
+    <section class="panel" id="panel-cvd">
+      <div class="panel-head">
+        <h2>2. 色の見え方・明るさ</h2>
+        <div class="controls">
+          <label>表示幅
+            <select id="cvd-width">
+              <option value="original">大きめ（320px）</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <p class="note">色覚特性のシミュレーションは、1型・2型が Machado ほか（2009）、3型が Brettel ほか（1997）のモデル（いずれも色の区別がもっとも難しい場合）を使った近似です。同じ特性でも見え方には個人差があります。「明るさのみ」で文字と背景が溶けるなら、色の違いだけで区別している可能性があります。</p>
+      <div id="cvd-grid" class="cvd-grid"></div>
+    </section>
+
+    <!-- コントラスト・重なり -->
+    <section class="panel" id="panel-contrast">
+      <div class="panel-head">
+        <h2>3. 文字と背景のコントラスト比 ／ 4. 重なり領域</h2>
+      </div>
+      <div class="contrast-layout">
+        <div class="stage-wrap">
+          <div class="stage-tools">
+            <span class="seg" role="radiogroup" aria-label="クリックで拾う色">
+              <button type="button" class="seg-btn active" data-pick="fg" role="radio" aria-checked="true">文字色を拾う</button>
+              <button type="button" class="seg-btn" data-pick="bg" role="radio" aria-checked="false">背景色を拾う</button>
+            </span>
+            <label>範囲
+              <select id="sample-size">
+                <option value="1">1px</option>
+                <option value="3" selected>3×3の平均</option>
+                <option value="5">5×5の平均</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="show-regions" checked> 重なり領域を表示</label>
+          </div>
+          <canvas id="stage" class="stage" aria-label="画像をクリックして色を拾う"></canvas>
+          <p class="note">文字の色は、輪郭（ふち）ではなく太い線の中央をクリックすると正確に拾えます。</p>
+        </div>
+
+        <div class="side">
+          <div class="swatches">
+            <div class="swatch-row">
+              <span class="swatch" id="sw-fg"></span>
+              <label>文字色 <input type="text" id="hex-fg" value="#FFFFFF" maxlength="7" spellcheck="false" autocomplete="off"></label>
+            </div>
+            <div class="swatch-row">
+              <span class="swatch" id="sw-bg"></span>
+              <label>背景色 <input type="text" id="hex-bg" value="#000000" maxlength="7" spellcheck="false" autocomplete="off"></label>
+            </div>
+            <button type="button" class="btn ghost" id="swap">入れ替え</button>
+          </div>
+          <div class="ratio-box">
+            <div class="ratio-label">コントラスト比</div>
+            <div class="ratio" id="ratio">21.00 : 1</div>
+            <div class="ratio-preview" id="ratio-preview">見本 Aa あいう</div>
+            <table class="verdict">
+              <thead><tr><th></th><th>AA</th><th>AAA</th></tr></thead>
+              <tbody>
+                <tr><th>通常の文字</th><td id="v-aa-normal"></td><td id="v-aaa-normal"></td></tr>
+                <tr><th>大きい文字</th><td id="v-aa-large"></td><td id="v-aaa-large"></td></tr>
+              </tbody>
+            </table>
+            <p class="note">基準は WCAG 2.x（通常の文字は AA 4.5、AAA 7。大きい文字は AA 3、AAA 4.5）。Webページ向けの基準ですが、サムネの文字の読みやすさの目安になります。縁取りや影がある文字は、縁取り色と背景色の組み合わせも確認してください。</p>
+          </div>
+
+          <details class="editor" open>
+            <summary>重なり領域（画像に対する％）</summary>
+            <p class="note">右下の再生時間表示などが重なりやすい場所の目安です。位置や大きさはサービスや画面によって変わるため、実際の表示に合わせて調整してください。</p>
+            <div id="region-list" class="row-list"></div>
+            <div class="editor-actions">
+              <button type="button" class="btn" id="region-add">領域を追加</button>
+              <button type="button" class="btn ghost" id="region-reset">初期値に戻す</button>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel export">
+      <div>
+        <h2>比較シートを保存</h2>
+        <p class="note">縮小表示・色の見え方・コントラスト比を1枚のPNGにまとめて保存します（保存もブラウザ内で行います）。</p>
+      </div>
+      <button type="button" class="btn primary" id="export">PNGで保存</button>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>MIT License ／ 処理はすべてブラウザ内で完結します。</p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
